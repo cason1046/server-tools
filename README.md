@@ -56,11 +56,18 @@ sudo bash /tmp/harden.sh
                        如 "/p/c1.pem:/p/k1.pem,/p/c2.pem:/p/k2.pem"
 --upstream-http-port   反代目标 HTTP 端口（Docker nginx 在 127.0.0.1 上监听的端口）
 --upstream-https-port  （单层 TLS 下未使用，仅为接口兼容保留）
+--csp-extra-domains    （可选，默认空）CSP 额外放行的域名，逗号分隔，如 "x.com,*.x.com"。
+                       传了就把这些域名加进 script/style/img/connect(含 wss)/frame/font-src；
+                       不传则 CSP 仅 'self' 基础策略，不含任何第三方域名（真正通用）
+--sse-paths            （可选，默认空）需要长连接的 SSE 路径，逗号分隔，如 "/api/sse/,/stream/"。
+                       传了就为每个路径生成 proxy_buffering off + 3600s 超时的 location；不传则不生成
 ```
 
 **生成的 site 配置包含：** HTTP→HTTPS 跳转、每域名独立 server block + 独立证书、
-`proxy_pass` 到 `http://127.0.0.1:<upstream-http-port>`、SSE 支持
-（`proxy_buffering off` + `proxy_read_timeout 3600s`）、安全响应头、CSP 放行 nexvora.cc。
+`proxy_pass` 到 `http://127.0.0.1:<upstream-http-port>`、安全响应头、
+**CSP 默认仅 `'self'`**（用 `--csp-extra-domains` 放行额外域名）、
+**可选 SSE 块**（用 `--sse-paths` 指定，`proxy_buffering off` + `proxy_read_timeout 3600s`）。
+脚本本身不含任何项目专属域名/路径硬编码。
 
 **返回值约定：**
 - stdout 打印一行 `MODE=gateway` 或 `MODE=direct`
@@ -74,7 +81,9 @@ sudo bash setup-nginx.sh \
   --domains "cmstwn.com,cmstwnonline.com" \
   --ssl-certs "/opt/ssl/c1.pem:/opt/ssl/k1.pem,/opt/ssl/c2.pem:/opt/ssl/k2.pem" \
   --upstream-http-port 8080 \
-  --upstream-https-port 8443
+  --csp-extra-domains "nexvora.cc,*.nexvora.cc" \
+  --sse-paths "/api/client/sse/"
+# 通用网站不需要后两个参数，留空即可
 ```
 
 **用法 2：被部署脚本 `source` 调用（推荐）**
@@ -88,7 +97,9 @@ setup_nginx_main \
   --domains "$DOMAIN" \
   --ssl-certs "$CERT:$KEY" \
   --upstream-http-port "$HTTP_PORT" \
-  --upstream-https-port 8443
+  --csp-extra-domains "nexvora.cc,*.nexvora.cc" \
+  --sse-paths "/api/client/sse/"
+# 普通项目不传 --csp-extra-domains / --sse-paths 即可（CSP 仅 'self'，无 SSE）
 
 # 读取结果
 case "$NGINX_MODE" in
